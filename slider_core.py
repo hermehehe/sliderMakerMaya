@@ -19,12 +19,11 @@ def create_slider_ctrl(name):
     box_ctrl = cmds.nurbsSquare(name=ctrl_box_name, normal=[0, 0, 1], d=3, sl1=box_len, sl2=box_width)
     circle_node = circle_ctrl[0]
     box_node = box_ctrl[0]
-
     # group polygons
     ctrl_group = cmds.group(box_node, circle_node, name=slider_name)
-    if circle_node[0] == '|':
-        circle_node = ctrl_group + circle_node
-        box_node = ctrl_group + box_node
+
+    circle_node = ctrl_group + '|' + circle_node
+    box_node = ctrl_group + '|' + box_node
 
     # edit box to have curved ends
     z_loc = math.sqrt(((box_width/2.0)**2 + (box_width/4.0)**2))
@@ -80,11 +79,12 @@ def get_selection():
     return selection
 
 
-def create_attr_dict(selection):
+def create_attr_dict(selection, num_keys):
     """ create dictionary of all attributes from selected controls and contains their previous & current values
 
     Args:
         selection: list of selected controls
+        num_keys: number of keys user chooses to select (either 2 or 3)
 
     Returns:
         attr_dict: dictionary of attribute names as keys and list of previous and current values
@@ -96,7 +96,10 @@ def create_attr_dict(selection):
         for attr in attr_list:
             ctrl_attr_full = '{}.{}'.format(ctrl, attr)
             value = cmds.getAttr(ctrl_attr_full)
-            attr_dict[ctrl_attr_full] = [value, value, value]    # [min value, default value, max value]
+            if num_keys == 3:
+                attr_dict[ctrl_attr_full] = [value, value, value]    # [min value, default value, max value]
+            else:
+                attr_dict[ctrl_attr_full] = [value, value] # [min value, max value]
 
     return attr_dict
 
@@ -130,7 +133,7 @@ def create_slider_attr(controls):
 
     return limit_dict
 
-# TEST THIS FUNCTION
+
 def update_attr_dict(attr_dict, slider_val):
     """ Updates attribute values in dictionary
     Args:
@@ -143,16 +146,43 @@ def update_attr_dict(attr_dict, slider_val):
     for attr, value_list in attr_dict.items():
         # compare and update value list
         current_val = cmds.getAttr(attr)
-        if current_val == value_list[0] and current_val == value_list[1] and current_val == value_list[2]:
-            continue
-        elif slider_val == 'min' and current_val is not value_list[0]:
-            attr_dict[attr] = [current_val, value_list[1], value_list[2]]
-        elif slider_val == 'default' and current_val is not value_list[1]:
-            attr_dict[attr] = [value_list[0], current_val, value_list[2]]
-        else:
-            attr_dict[attr] = [value_list[0], value_list[1], current_val]
+        if slider_val == 'min':
+            attr_dict[attr][0] = current_val
+        if slider_val == 'default':
+            attr_dict[attr][1] = current_val
+        if slider_val == 'max':
+            attr_dict[attr][-1] = current_val
 
     return attr_dict
 
 
-#def set_driven_keys():
+def set_driven_keys(attr_dict, limit_dict, controls):
+    """ Set attribute values and key min, default and max slider values to each
+
+    Args:
+        attr_dict: attribute names and their min, default and max values
+        limit_dict: circle control's Slider and Translate Y min, default and max values
+        controls: names of control group and circle node
+
+    """
+    slider_full_name = '{}.{}'.format(controls[1], controls[0])
+
+    for attr, value_list in attr_dict.items():
+        # if all values in the list are the same, skip keying
+        if (value_list[0] == value_list[1]) and (value_list[0] == value_list[2]):
+            continue
+
+        cmds.setAttr(attr, keyable=True)
+        i = 0
+        for lim in limit_dict.keys():
+            # set attribute and slider to min, default then max values
+            cmds.setAttr(attr, value_list[0+i])
+            cmds.setAttr('{}.translateY'.format(controls[1]), lim)
+            cmds.setAttr(attr, limit_dict[lim])
+            # set driven key with slider as driver for all attributes
+            cmds.setDrivenKeyframe(attr, cd=slider_full_name)
+            print('Attribute: {} = {}, Slider: {} = {}'.format(attr, value_list[0+i], slider_full_name, lim))
+            i = i+1
+
+
+
