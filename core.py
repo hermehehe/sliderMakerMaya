@@ -1,32 +1,57 @@
 from maya import cmds
 import math
+import os
+import json
+
+ROOT_DIR = r'C:\Users\herme\python_projects\slider_maker'
+EXT = 'json'
 
 
-def create_slider_ctrl(name):
+def create_slider_ctrl(name, size):
     """ Create slider control polygons (rectangle and circle).
         Groups polygons and freezes transforms
-        Args: User input name of slider
+        Args:
+           name: User input name of slider
+           size: User selected size of slider (small, medium, large)
         Return:
             list: control group name, circle control name
     """
     slider_name = name+"_Slider"
     ctrl_box_name = 'box'
     ctrl_circle_name = name+'_slider_ctrl'
-    box_len = 20
-    box_width = 7
+
+    if size == 'small':
+        box_len = 10
+        box_width = 5
+        radius = 1
+    elif size == 'medium':
+        box_len = 15
+        box_width = 6
+        radius = 2
+    else:
+        box_len = 20
+        box_width = 7
+        radius = 3
+
+    # create NURBS text label
+    label = cmds.textCurves(f='Times-Roman', t=name)
+    cmds.move(-box_width/2.0 - 2.0, box_len / 2.0 + 5, 0, label)
+    cmds.scale(5, 5, 5, label)
+
     # create slider control polygons
-    circle_ctrl = cmds.circle(name=ctrl_circle_name, normal=[0, 0, 1], r=3)
+    circle_ctrl = cmds.circle(name=ctrl_circle_name, normal=[0, 0, 1], r=radius)
     box_ctrl = cmds.nurbsSquare(name=ctrl_box_name, normal=[0, 0, 1], d=3, sl1=box_len, sl2=box_width)
     circle_node = circle_ctrl[0]
     box_node = box_ctrl[0]
     # group polygons
-    ctrl_group = cmds.group(box_node, circle_node, name=slider_name)
+    ctrl_group = cmds.group(box_node, circle_node, label, name=slider_name)
 
+    # construct full name of polygon nodes
     circle_node = ctrl_group + '|' + circle_node
     box_node = ctrl_group + '|' + box_node
 
     # edit box to have curved ends
-    z_loc = math.sqrt(((box_width/2.0)**2 + (box_width/4.0)**2))
+    z_loc = math.sqrt(((box_width/2.0)**2 + (box_width/4.0)**2))  # pythagoras theorem to find z points for curve
     left_curve = cmds.curve(d=3, p=[(box_width/2.0, 0, 0), (box_width/4.0, 0, z_loc), (-box_width/4.0, 0, z_loc),
                                     (-box_width/2.0, 0, 0)])
     right_curve = cmds.curve(d=3, p=[(box_width/2, 0, 0), (box_width/4.0, 0, -z_loc), (-box_width/4.0, 0, -z_loc),
@@ -55,67 +80,36 @@ def create_slider_ctrl(name):
     cmds.setAttr('{}.translateZ'.format(circle_node), lock=True)
 
     # set min/max values for circle y translation
-    cmds.transformLimits(circle_node, ty=[-8, 8], ety=[True, True])
+    cmds.transformLimits(circle_node, ty=[-((box_len/2.0)-2), (box_len/2.0)-2], ety=[True, True])
 
     controls = [ctrl_group, circle_node]
     return controls
 
 
-# change this, need to create a dictionary of selection names.attributes and min. medium, max values of all attributes
-def get_selection():
-    """ Get names of all selected controls that will be driven by the slider
-
-    Returns: List of selected controls
-
-    """
-    selection = cmds.ls(selection=True)
-    if len(selection) == 0:
-        return []  # empty list
-    # check if each item is a control
-    for name in selection:
-        suffix = name.split('_')[-1]
-        if suffix != 'anim':
-            selection.remove(name)
-    return selection
-
-
-def create_attr_dict(selection, num_keys):
-    """ create dictionary of all attributes from selected controls and contains their previous & current values
-
-    Args:
-        selection: list of selected controls
-        num_keys: number of keys user chooses to select (either 2 or 3)
-
-    Returns:
-        attr_dict: dictionary of attribute names as keys and list of previous and current values
-
-    """
-    attr_dict = {}
-    for ctrl in selection:
-        attr_list = cmds.listAttr(ctrl, k=True, u=True)
-        for attr in attr_list:
-            ctrl_attr_full = '{}.{}'.format(ctrl, attr)
-            value = cmds.getAttr(ctrl_attr_full)
-            if num_keys == 3:
-                attr_dict[ctrl_attr_full] = [value, value, value]    # [min value, default value, max value]
-            else:
-                attr_dict[ctrl_attr_full] = [value, value] # [min value, max value]
-
-    return attr_dict
-
-
-def create_slider_attr(controls):
+def create_slider_attr(controls, size):
     """ Add driver attribute to the circle polygon to drive keys
+
     Args:
-        controls: list, 0 = ctrl group name, 1 = circle ctrl name
+        controls: list containing ctrl group name (0) and circle ctrl name (1)
+        size: User selected size of slider (small, medium, large)
 
     Returns:
-        dict: circle control's Slider and Translate Y min, default and max values
+        limit_dict: circle control's Slider and Translate Y min, default and max values
+
     """
     slider_attr_name = controls[0]
     slider_full_name = '{}.{}'.format(controls[1], slider_attr_name)
-    drv_min = -10
-    drv_max = 10
+
+    if size == 'small':
+        drv_min = -1
+        drv_max = 1
+    elif size == 'medium':
+        drv_min = -5
+        drv_max = 5
+    else:
+        drv_min = -10
+        drv_max = 10
+
     # Add slider attribute to circle control
     cmds.addAttr(controls[1], longName=slider_attr_name, defaultValue=0, minValue=drv_min, maxValue=drv_max)
     cmds.setAttr(slider_full_name, keyable=True)
@@ -134,6 +128,79 @@ def create_slider_attr(controls):
     return limit_dict
 
 
+def get_selection():
+    """ Get names of all selected controls that will be driven by the slider
+
+    Returns: List of selected controls
+
+    """
+    selection = cmds.ls(selection=True)
+    if len(selection) == 0:
+        return []  # empty list
+    # check if each item is a control
+    for name in selection:
+        suffix = name.split('_')[-1]
+        if suffix != 'anim':
+            selection.remove(name)
+    return selection
+
+
+def create_attr_dict(selection, num_keys):
+    """ create dictionary of all attributes from selected controls that contains their previous & current values
+
+    Args:
+        selection: list of selected controls
+        num_keys: number of driven keys user wants to set (either 2 or 3)
+
+    Returns:
+        attr_dict: dictionary of attribute names as keys and a list of attribute values
+
+    """
+    attr_dict = {}
+    for ctrl in selection:
+        attr_list = cmds.listAttr(ctrl, k=True, u=True)
+        for attr in attr_list:
+            ctrl_attr_full = '{}.{}'.format(ctrl, attr)
+            value = cmds.getAttr(ctrl_attr_full)
+            if num_keys == 3:
+                attr_dict[ctrl_attr_full] = [value, value, value]    # [min value, default value, max value]
+            else:
+                attr_dict[ctrl_attr_full] = [value, value]  # [min value, max value]
+
+    return attr_dict
+
+
+def write_attrs_to_file(name, attr_dict):
+    """Write attribute dictionary to json file
+
+    Args:
+        name: User input name of slider
+        attr_dict: dictionary of selected controls attributes and there key values
+
+
+    """
+    slider_name = name + "_slider"
+    file_name = '{}.{}'.format(name, EXT)
+    file_path = os.path.join(ROOT_DIR, file_name)
+
+    with open(file_path, 'w') as f:
+        json.dump(attr_dict, f, indent=4)
+
+
+def read_attrs_from_file(file_path):
+    """Read attribute data from json file
+
+    Args:
+        file_path: full path name of file
+
+    Returns: attribute dictionary
+
+    """
+    with open(file_path, 'r') as f:
+        attr_dict = json.load(f)
+        return attr_dict
+
+
 def update_attr_dict(attr_dict, slider_val):
     """ Updates attribute values in dictionary
     Args:
@@ -148,9 +215,9 @@ def update_attr_dict(attr_dict, slider_val):
         current_val = cmds.getAttr(attr)
         if slider_val == 'min':
             attr_dict[attr][0] = current_val
-        if slider_val == 'default':
+        elif slider_val == 'default':
             attr_dict[attr][1] = current_val
-        if slider_val == 'max':
+        elif slider_val == 'max':
             attr_dict[attr][-1] = current_val
 
     return attr_dict
@@ -181,8 +248,6 @@ def set_driven_keys(attr_dict, limit_dict, controls):
             cmds.setAttr(attr, limit_dict[lim])
             # set driven key with slider as driver for all attributes
             cmds.setDrivenKeyframe(attr, cd=slider_full_name)
-            print('Attribute: {} = {}, Slider: {} = {}'.format(attr, value_list[0+i], slider_full_name, lim))
             i = i+1
-
 
 
