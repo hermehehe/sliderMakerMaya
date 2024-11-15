@@ -16,9 +16,9 @@ def create_slider_ctrl(name, size):
         Return:
             list: control group name, circle control name
     """
-    slider_name = name+"_Slider"
+    slider_name = '{}_Slider'.format(name)
     ctrl_box_name = 'box'
-    ctrl_circle_name = name+'_slider_ctrl'
+    ctrl_circle_name = '{}_slider_ctrl'.format(name)
 
     if size == 'small':
         box_len = 10
@@ -145,12 +145,11 @@ def get_selection():
     return selection
 
 
-def create_attr_dict(selection, num_keys):
+def create_attr_dict(selection):
     """ create dictionary of all attributes from selected controls that contains their previous & current values
 
     Args:
         selection: list of selected controls
-        num_keys: number of driven keys user wants to set (either 2 or 3)
 
     Returns:
         attr_dict: dictionary of attribute names as keys and a list of attribute values
@@ -161,11 +160,7 @@ def create_attr_dict(selection, num_keys):
         attr_list = cmds.listAttr(ctrl, k=True, u=True)
         for attr in attr_list:
             ctrl_attr_full = '{}.{}'.format(ctrl, attr)
-            value = cmds.getAttr(ctrl_attr_full)
-            if num_keys == 3:
-                attr_dict[ctrl_attr_full] = [value, value, value]    # [min value, default value, max value]
-            else:
-                attr_dict[ctrl_attr_full] = [value, value]  # [min value, max value]
+            attr_dict[ctrl_attr_full] = [0, 0, 0]    # [min value, default value, max value]
 
     return attr_dict
 
@@ -179,8 +174,8 @@ def write_attrs_to_file(name, attr_dict):
 
 
     """
-    slider_name = name + "_slider"
-    file_name = '{}.{}'.format(name, EXT)
+    slider_name = '{}_slider'.format(name)
+    file_name = '{}.{}'.format(slider_name, EXT)
     file_path = os.path.join(ROOT_DIR, file_name)
 
     with open(file_path, 'w') as f:
@@ -205,20 +200,16 @@ def update_attr_dict(attr_dict, slider_val):
     """ Updates attribute values in dictionary
     Args:
         attr_dict: dictionary of selected control attribute names and list of previous and current values
-        slider_val: setting of slider (min, default, max)
+        slider_val: setting of slider (min or max)
     """
-    # setDrivenKeyframe -currentDriver Eyes_Slider1|Eyes_slider_ctrl.Eyes_Slider severus:eyeIK_right_anim.translateY;
-    # ['severus:eyeFK_right_anim', 'severus:sideHead_left_mover_ctrl_anim', 'severus:eye_masterIK_anim']
 
     for attr, value_list in attr_dict.items():
         # compare and update value list
         current_val = cmds.getAttr(attr)
         if slider_val == 'min':
             attr_dict[attr][0] = current_val
-        elif slider_val == 'default':
-            attr_dict[attr][1] = current_val
         elif slider_val == 'max':
-            attr_dict[attr][-1] = current_val
+            attr_dict[attr][2] = current_val
 
     return attr_dict
 
@@ -235,14 +226,14 @@ def set_driven_keys(attr_dict, limit_dict, controls):
     slider_full_name = '{}.{}'.format(controls[1], controls[0])
 
     for attr, value_list in attr_dict.items():
-        # if all values in the list are the same, skip keying
-        if (value_list[0] == value_list[1]) and (value_list[0] == value_list[2]):
+        # if min and max key values are the same, skip keying (unused attribute)
+        if value_list[0] == value_list[2] and value_list[0] == 0:
             continue
 
         cmds.setAttr(attr, keyable=True)
         i = 0
         for lim in limit_dict.keys():
-            # set attribute and slider to min, default then max values
+            # set attribute and slider values
             cmds.setAttr(attr, value_list[0+i])
             cmds.setAttr('{}.translateY'.format(controls[1]), lim)
             cmds.setAttr(attr, limit_dict[lim])
