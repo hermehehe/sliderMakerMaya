@@ -7,12 +7,12 @@ ROOT_DIR = r'C:\Users\herme\python_projects\slider_maker'
 EXT = 'json'
 
 
-def create_slider_ctrl(name, size):
+def create_slider_ctrl(name, selected):
     """ Create slider control polygons (rectangle and circle).
         Groups polygons and freezes transforms
         Args:
            name: User input name of slider
-           size: User selected size of slider (small, medium, large)
+           selected: name of a selected control
         Return:
             list: control group name, circle control name
     """
@@ -20,22 +20,13 @@ def create_slider_ctrl(name, size):
     ctrl_box_name = 'box'
     ctrl_circle_name = '{}_slider_ctrl'.format(name)
 
-    if size == 'small':
-        box_len = 10
-        box_width = 5
-        radius = 1
-    elif size == 'medium':
-        box_len = 15
-        box_width = 6
-        radius = 2
-    else:
-        box_len = 20
-        box_width = 7
-        radius = 3
+    box_len = 20
+    box_width = 7
+    radius = 3
 
     # create NURBS text label
     label = cmds.textCurves(f='Times-Roman', t=name)
-    cmds.move(-box_width/2.0 - 2.0, box_len / 2.0 + 5, 0, label)
+    cmds.move(-box_width/2.0 - len(name)/2.0, box_len / 2.0 + 5, 0, label) # centre text
     cmds.scale(5, 5, 5, label)
 
     # create slider control polygons
@@ -43,12 +34,16 @@ def create_slider_ctrl(name, size):
     box_ctrl = cmds.nurbsSquare(name=ctrl_box_name, normal=[0, 0, 1], d=3, sl1=box_len, sl2=box_width)
     circle_node = circle_ctrl[0]
     box_node = box_ctrl[0]
-    # group polygons
+
+    # parent under rig
+    namespace = selected.split(':')[0]
+    rig_name = namespace + ':all_anim'
     ctrl_group = cmds.group(box_node, circle_node, label, name=slider_name)
+    cmds.parent(ctrl_group, rig_name)
 
     # construct full name of polygon nodes
-    circle_node = ctrl_group + '|' + circle_node
-    box_node = ctrl_group + '|' + box_node
+    circle_full_node = ctrl_group + "|" + circle_node
+    box_full_node = ctrl_group + "|" + box_node
 
     # edit box to have curved ends
     z_loc = math.sqrt(((box_width/2.0)**2 + (box_width/4.0)**2))  # pythagoras theorem to find z points for curve
@@ -61,37 +56,53 @@ def create_slider_ctrl(name, size):
     cmds.move(0, -box_len/2.0, 0, left_curve)
     cmds.move(0, box_len/2.0, 0, right_curve)
 
-    cmds.parent(right_curve, left_curve, box_node)
-    cmds.delete(box_node+'|right'+ctrl_box_name, box_node+'|left'+ctrl_box_name)
-
-    # move group from origin
-    cmds.move(50, 150, 0, ctrl_group)
-
-    # freeze transforms
-    cmds.makeIdentity(ctrl_group, apply=True, rotate=True, translate=True, scale=True)
-
-    # lock rotations
-    cmds.setAttr('{}.r'.format(ctrl_group), lock=True)
-    cmds.setAttr('{}.r'.format(circle_node), lock=True)
-    cmds.setAttr('{}.r'.format(box_node), lock=True)
-
-    # lock circle x, z translations
-    cmds.setAttr('{}.translateX'.format(circle_node), lock=True)
-    cmds.setAttr('{}.translateZ'.format(circle_node), lock=True)
+    cmds.parent(right_curve, left_curve, box_full_node)
+    cmds.delete(box_full_node+'|right'+ctrl_box_name, box_full_node+'|left'+ctrl_box_name)
 
     # set min/max values for circle y translation
-    cmds.transformLimits(circle_node, ty=[-((box_len/2.0)-2), (box_len/2.0)-2], ety=[True, True])
+    cmds.transformLimits(circle_full_node, ty=[-((box_len/2.0)-2), (box_len/2.0)-2], ety=[True, True])
 
-    controls = [ctrl_group, circle_node]
+    controls = [ctrl_group, circle_node, box_node]
     return controls
 
 
-def create_slider_attr(controls, size):
+def slider_orientation(controls, selected, orient):
+    """ Rotate and move slider. Lock unused transforms either horizontal or vertical
+
+    Args:
+        controls: (list) slider ctrl group name, slider circle node name, slider box node name
+        selected: (str) name of first user selected control attribute
+        orient: (str) horizontal or vertical
+
+    Returns: (str) x or y
+
+    """
+    circle_full_node = "{}|{}".format(controls[0], controls[1])
+    box_full_node = "{}|{}".format(controls[0], controls[2])
+    ctrl_names = [controls[0], circle_full_node, box_full_node]
+
+    # move group from origin closer to selection
+    selected_ctrl = selected.split('.')[0]
+    location = cmds.xform(selected_ctrl, q=True, ws=True, t=True)
+    cmds.move(location[0], location[1], location[2], controls[0])
+
+    # lock rotations
+    for node in ctrl_names:
+        cmds.setAttr('{}.r'.format(node, lock=True))
+
+    # lock circle x, z translations
+    cmds.setAttr('{}.translateX'.format(circle_full_node), lock=True)
+    cmds.setAttr('{}.translateZ'.format(circle_full_node), lock=True)
+
+    # freeze transforms
+    cmds.makeIdentity(controls[0], apply=True, rotate=True, translate=True, scale=True)
+
+
+def create_slider_attr(controls):
     """ Add driver attribute to the circle polygon to drive keys
 
     Args:
         controls: list containing ctrl group name (0) and circle ctrl name (1)
-        size: User selected size of slider (small, medium, large)
 
     Returns:
         limit_dict: circle control's Slider and Translate Y min, default and max values
@@ -100,25 +111,17 @@ def create_slider_attr(controls, size):
     slider_attr_name = controls[0]
     slider_full_name = '{}.{}'.format(controls[1], slider_attr_name)
 
-    if size == 'small':
-        drv_min = -1
-        drv_max = 1
-    elif size == 'medium':
-        drv_min = -5
-        drv_max = 5
-    else:
-        drv_min = -10
-        drv_max = 10
+    drv_min = -10
+    drv_max = 10
 
     # Add slider attribute to circle control
     cmds.addAttr(controls[1], longName=slider_attr_name, defaultValue=0, minValue=drv_min, maxValue=drv_max)
     cmds.setAttr(slider_full_name, keyable=True)
 
-    # Set circle ctrl translateY as the driver for the slider attr
     # Get y transform limits
     y_lims = cmds.transformLimits(controls[1], query=True, ty=True)
     limit_dict = {y_lims[0]: drv_min, 0: 0, y_lims[1]: drv_max}
-
+    # Set circle ctrl translateY as the driver for the slider attr
     # set keys for min, default and max values of translate Y and slider attributes
     for i, j in limit_dict.items():
         cmds.setAttr('{}.translateY'.format(controls[1]), i)
@@ -157,10 +160,12 @@ def create_attr_dict(selection):
     """
     attr_dict = {}
     for ctrl in selection:
-        attr_list = cmds.listAttr(ctrl, k=True, u=True)
+        attr_list = cmds.listAttr(ctrl, k=True, u=True, r=True, w=True)
         for attr in attr_list:
             ctrl_attr_full = '{}.{}'.format(ctrl, attr)
-            attr_dict[ctrl_attr_full] = [0, 0, 0]    # [min value, default value, max value]
+            value = cmds.getAttr(ctrl_attr_full)
+
+            attr_dict[ctrl_attr_full] = [value, 0, value] # min, default, max values
 
     return attr_dict
 
@@ -223,22 +228,27 @@ def set_driven_keys(attr_dict, limit_dict, controls):
         controls: names of control group and circle node
 
     """
-    slider_full_name = '{}.{}'.format(controls[1], controls[0])
+    ctrl_slider_attr = '{}.{}'.format(controls[1], controls[0])
+    ctrl_y_attr = '{}.translateY'.format(controls[1])
 
     for attr, value_list in attr_dict.items():
         # if min and max key values are the same, skip keying (unused attribute)
-        if value_list[0] == value_list[2] and value_list[0] == 0:
+        if value_list[0] == value_list[2]:
             continue
 
-        cmds.setAttr(attr, keyable=True)
         i = 0
         for lim in limit_dict.keys():
-            # set attribute and slider values
-            cmds.setAttr(attr, value_list[0+i])
-            cmds.setAttr('{}.translateY'.format(controls[1]), lim)
-            cmds.setAttr(attr, limit_dict[lim])
-            # set driven key with slider as driver for all attributes
-            cmds.setDrivenKeyframe(attr, cd=slider_full_name)
-            i = i+1
+            # if min or max value equals default, skip keying
+            if value_list[i] == 0 and lim != 0:
+                i += 1
+                continue
 
+            # set attribute and slider values
+            cmds.setAttr(ctrl_y_attr, lim)  # must move driver before moving driven attribute
+            cmds.setAttr(attr, value_list[i])
+
+            # set driven key with slider as driver for all attributes
+            cmds.setDrivenKeyframe(attr, cd=ctrl_slider_attr)
+
+            i += 1
 
