@@ -67,7 +67,7 @@ def save_selection(*args):
     if name == '':
         return
     # validate selection
-    if not selection:
+    if selection is None:
         cmds.warning("Please select at least one controller!")
         return
 

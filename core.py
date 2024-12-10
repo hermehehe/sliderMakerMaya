@@ -140,7 +140,6 @@ def get_selection():
     selection = cmds.ls(selection=True)
     if len(selection) == 0:
         return []  # empty list
-    # check if each item is a control
 
     return selection
 
@@ -158,6 +157,8 @@ def create_attr_dict(selection):
     attr_dict = {}
     for ctrl in selection:
         attr_list = cmds.listAttr(ctrl, k=True, u=True, r=True, w=True)
+        if attr_list is None:
+            continue
         for attr in attr_list:
             ctrl_attr_full = '{}.{}'.format(ctrl, attr)
             value = cmds.getAttr(ctrl_attr_full)
@@ -212,10 +213,12 @@ def set_driven_keys(attr_dict, limit_dict, controls, zero_as_default):
         # go through each attribute and key min, default and max values to the driver attribute
         i = 0
         for y_lim in limit_dict.keys():
-            if not zero_as_default and i == 1:  # if user selects no default value skip default key
+            # if user does not select set zero as default skip keying default
+            if not zero_as_default and i == 1:
+                i += 1
                 continue
-
-            if value_list[i] == 0 and y_lim != 0:  # if min or max value equals default, skip keying
+            # if min or max value equals default, skip keying (duplicate key)
+            elif value_list[i] == 0 and y_lim != 0 and zero_as_default:
                 i += 1
                 continue
 
@@ -228,11 +231,11 @@ def set_driven_keys(attr_dict, limit_dict, controls, zero_as_default):
             i += 1
 
         # if lower or upper bound range not in use, restrict y translation value
-        if not lwr_bound:
+        if not lwr_bound and zero_as_default:
             lims = cmds.transformLimits(controls[1], query=True, ty=True)
             cmds.transformLimits(controls[1], ty=[0, lims[1]], ety=[True, True])
 
-        if not upr_bound:
+        if not upr_bound and zero_as_default:
             lims = cmds.transformLimits(controls[1], query=True, ty=True)
             cmds.transformLimits(controls[1], ty=[lims[0], 0], ety=[True, True])
 
