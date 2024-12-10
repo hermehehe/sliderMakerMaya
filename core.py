@@ -61,21 +61,21 @@ def create_slider_ctrl(name, selected_namespace):
     cmds.transformLimits(circle_full_node, ty=[-((box_len/2.0)-2), (box_len/2.0)-2], ety=[True, True])
 
     controls = [ctrl_full_group, circle_full_node, box_full_node]
-    print("Controls: ")
-    print(controls)
+
     return controls
 
 
-def slider_position(controls, selected):
+def slider_position(controls, attr_dict):
     """ Rotate and move slider. Lock unused transforms either horizontal or vertical
 
     Args:
         controls: (list) slider ctrl group name, slider circle node name, slider box node name
-        selected: (str) name of first user selected control attribute
+        attr_dict: dictionary of attributes' full names as keys and list of values
 
     """
 
     # move group from origin closer to selection
+    selected = list(attr_dict.keys())[0]
     selected_ctrl = selected.split('.')[0]
     location = cmds.xform(selected_ctrl, q=True, ws=True, t=True)
     cmds.move(location[0], location[1], location[2], controls[0])
@@ -94,22 +94,25 @@ def slider_position(controls, selected):
             cmds.setAttr('{}.translateY'.format(node), lock=True)
 
 
-def create_slider_attr(controls):
+def create_slider_attr(controls, zero_as_default):
     """ Add driver attribute to the circle polygon to drive keys
 
     Args:
          controls: list containing ctrl group name (0) and circle ctrl name (1)
+         zero_as_default: bool value of Set Zero as default box
 
     Returns:
          limit_dict: circle control's Slider and Translate Y min, default and max values
 
     """
-    # ['severus:all_anim|Hands_Slider', 'severus:all_anim|Hands_Slider||Hands_slider_ctrl', 'severus:all_anim|Hands_Slider||box']
     slider_attr_name = controls[0].split('|')[-1]
     slider_full_name = '{}.{}'.format(controls[1], slider_attr_name)
 
     drv_min = -10
     drv_max = 10
+
+    if not zero_as_default:
+        drv_min = 0
 
     # Add slider attribute to circle control
     cmds.addAttr(controls[1], longName=slider_attr_name, defaultValue=0, minValue=drv_min, maxValue=drv_max)
@@ -138,10 +141,7 @@ def get_selection():
     if len(selection) == 0:
         return []  # empty list
     # check if each item is a control
-   # for name in selection:
-   #     suffix = name.split('_')[-1]
-   #     if suffix != 'anim':
-   #         selection.remove(name)
+
     return selection
 
 
@@ -185,7 +185,7 @@ def update_attr_dict(attr_dict, slider_val):
     return attr_dict
 
 
-def set_driven_keys(attr_dict, limit_dict, controls):
+def set_driven_keys(attr_dict, limit_dict, controls, zero_as_default):
     """ Set attribute values and key min, default and max slider values to each
 
     Args:
@@ -194,7 +194,6 @@ def set_driven_keys(attr_dict, limit_dict, controls):
         controls: names of control group and circle node
 
     """
-    # ['severus:all_anim|Hands_Slider', 'severus:all_anim|Hands_Slider||Hands_slider_ctrl', 'severus:all_anim|Hands_Slider||box']
     ctrl_slider_attr = '{}.{}'.format(controls[1], controls[0].split('|')[-1])
     ctrl_y_attr = '{}.translateY'.format(controls[1])
     lwr_bound = False
@@ -202,32 +201,33 @@ def set_driven_keys(attr_dict, limit_dict, controls):
 
     for attr, value_list in attr_dict.items():
         # if min and max key values are the same, skip keying (unused attribute)
-        if value_list[0] == value_list[2]:
+        if value_list[0] == value_list[-1]:
             continue
         # Check upper and lower bounds if they are in use (any attr going above or below 0)
-        if value_list[0] != 0:
+        if value_list[0] != 0 and zero_as_default:
             lwr_bound = True
-        if value_list[2] != 0:
+        if value_list[-1] != 0 and zero_as_default:
             upr_bound = True
+
         # go through each attribute and key min, default and max values to the driver attribute
         i = 0
-        for lim in limit_dict.keys():
-            # if min or max value equals default, skip keying
-            if value_list[i] == 0 and lim != 0:
+        for y_lim in limit_dict.keys():
+            if not zero_as_default and i == 1:  # if user selects no default value skip default key
+                continue
+
+            if value_list[i] == 0 and y_lim != 0:  # if min or max value equals default, skip keying
                 i += 1
                 continue
 
             # set attribute and slider values
-            cmds.setAttr(ctrl_y_attr, lim)  # must move driver before moving driven attribute
+            cmds.setAttr(ctrl_y_attr, y_lim)  # must move driver before moving driven attribute
             cmds.setAttr(attr, value_list[i])
 
             # set driven key with slider as driver for all attributes
-            # severus:all_anim|Hands_Slider||Hands_slider_ctrl.severus:all_anim|Hands_Slider
-            # severus:all_anim|Hands_Slider||Hands_slider_ctrl.Hands_Slider
             cmds.setDrivenKeyframe(attr, cd=ctrl_slider_attr)
             i += 1
 
-        # if lower or upper bound range not in use, restrict y translation value Y KEEPS STARTING ST TOP WHYY
+        # if lower or upper bound range not in use, restrict y translation value
         if not lwr_bound:
             lims = cmds.transformLimits(controls[1], query=True, ty=True)
             cmds.transformLimits(controls[1], ty=[0, lims[1]], ety=[True, True])
@@ -251,6 +251,42 @@ def get_selected_namespace():
     return namespaces
 
 
+def mirror_attrs(attr_dict):
+    """Construct mirrored attribute names and add them to attribute dictionary
+        Args:
+            attr_dict: dictionary of attribute names and values
+        Returns: updated attr_dict with new attributes
+    """
+    l_r_dict = {':r_': ':l_', '_r_': '_l_', 'right': 'left', 'Right': 'Left'}
+    mirrors_dict = {}
+    for attr, value_list in attr_dict.items():
+        new_attr = ''
+        for r_label, l_label in l_r_dict.items():
+            # construct mirrored name
+            if r_label in attr:
+                new_attr = '{}{}{}'.format(attr.split(r_label)[0], l_label, attr.split(r_label)[-1])
+                break
+            elif l_label in attr:
+                new_attr = '{}{}{}'.format(attr.split(l_label)[0], r_label, attr.split(l_label)[-1])
+                break
+        # check if attribute exists and is keyable
+        if new_attr == '':
+            continue
+        node_name = new_attr.split('.')[0]
+        attr_short_name = new_attr.split('.')[-1]
+        if not cmds.objExists(node_name) or not cmds.attributeQuery(attr_short_name, node=node_name, exists=True):
+            print("New Attr: {} does not exist".format(new_attr))
+            continue
+        # add new attribute to dictionary
+        mirrors_dict.update({new_attr: value_list})
+
+    # add mirror dictionary to attr dict
+    for mirror_attr, value_list in mirrors_dict.items():
+        attr_dict.update({mirror_attr: value_list})
+
+    return attr_dict
+
+
 def rename_attr_dict(namespace, attr_dict):
     """
 
@@ -269,10 +305,9 @@ def rename_attr_dict(namespace, attr_dict):
     # if different copy renamed keys and values to new dict
     renamed_attr_dict = {}
     for name, value in attr_dict.items():
-        new_name = '{}:{}'.format(namespace, name.split(':')[1])
-        print(new_name)
+        new_name = '{}:{}'.format(namespace, name.split(':')[-1])
         node = new_name.split('.')[0]
-        attr = new_name.split('.')[1]
+        attr = new_name.split('.')[-1]
         # if object and attribute exists add it to new dictionary
         if not cmds.objExists(node):
             continue

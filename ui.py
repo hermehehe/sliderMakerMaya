@@ -3,6 +3,8 @@ from slider_maker import core
 
 WINDOW_NAME = 'slider_maker_ui'
 TEXT_FIELD_NAME = 'slider_name'
+MIRROR_BOX = False
+DEFAULT_BOX = True
 
 
 def show_ui():
@@ -33,8 +35,8 @@ def show_ui():
     cmds.setParent('..')
     cmds.columnLayout(adjustableColumn=True, rowSpacing=5)
     cmds.rowLayout(numberOfColumns=2, adjustableColumn=[1, 2])
-    cmds.checkBox(label='Mirror', ann='Will apply keys to controls opposite from selected as well')
-    cmds.checkBox(label='Zero as Default', ann='Sets 0 as midpoint for slider controller')
+    cmds.checkBox(MIRROR_BOX, label='Mirror', ann='Will apply keys to controls opposite from selected as well')
+    cmds.checkBox(DEFAULT_BOX, label='Zero as Default', value=True, ann='Sets 0 as midpoint for slider controller')
 
     # apply keys
     cmds.setParent('..')
@@ -124,6 +126,8 @@ def set_max_key(*args):
 
 def apply_attr_dict(*args):
     """ Creates slider controller NURBS polygon group and sets all driven keys from attribute dictionary"""
+    zero_as_default_value = cmds.checkBox(DEFAULT_BOX, query=True, value=True)
+
     slider_name = get_name()
     if slider_name is None:
         return
@@ -132,29 +136,58 @@ def apply_attr_dict(*args):
     if attr_dict is None:
         return
 
+    # added mirror attributes if box checked
+    updated_attr_dict = add_mirror_attrs(slider_name, attr_dict)
+    print("Mirror Attr Dict: ")
+    print(updated_attr_dict)
+
+    # get all selected rig namespaces
     selected_namespace_list = core.get_selected_namespace()
     if len(selected_namespace_list) == 0:
         cmds.warning("Please select at least one rig!")
         return
-
+    # loop to set keys for all namespaces
     for namespace in selected_namespace_list:
         # rename attributes in dictionary to match selected namespace
-        renamed_attr_dict = {}
-        renamed_attr_dict = core.rename_attr_dict(namespace, attr_dict)
+        renamed_attr_dict = core.rename_attr_dict(namespace, updated_attr_dict)
         if not renamed_attr_dict:
             cmds.warning('Cannot apply {} slider to {}'.format(slider_name, namespace))
             continue
+
         # create NURBS polygons slider
         controls = core.create_slider_ctrl(slider_name, namespace)
         # move slider to rig location
-        selected = list(renamed_attr_dict.keys())[0]
-        core.slider_position(controls, selected)
-        # set driven keys
-        limit_dict = core.create_slider_attr(controls)
-        core.set_driven_keys(renamed_attr_dict, limit_dict, controls)
+        core.slider_position(controls, renamed_attr_dict)
 
-    # cleanup removing attr dict json file
+        # set driven keys
+        limit_dict = core.create_slider_attr(controls, zero_as_default_value)
+        core.set_driven_keys(renamed_attr_dict, limit_dict, controls, zero_as_default_value)
+
+    # file_cleanup()
+
+
+def add_mirror_attrs(name, attr_dict):
+    """And mirror attributes to attribute dictionary if mirror box checked"""
+    mirror_value = cmds.checkBox(MIRROR_BOX, query=True, value=True)
+
+    if mirror_value:
+        mirror_attr_dict = core.mirror_attrs(attr_dict)
+        core.write_attrs_to_file(name, mirror_attr_dict)
+        return mirror_attr_dict
+    else:
+        return attr_dict
+
+
+def file_cleanup():
+    """Remove json file storing attribute dictionary"""
+    slider_name = get_name()
     file_name = '{}_slider.{}'.format(slider_name, core.EXT)
     file_path = core.os.path.join(core.ROOT_DIR, file_name)
 
     core.remove_json(file_path)
+
+
+
+
+
+
