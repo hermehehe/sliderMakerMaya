@@ -1,1 +1,1 @@
-# SliderMaker
+# sliderMaker
