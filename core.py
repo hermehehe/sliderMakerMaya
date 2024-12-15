@@ -187,7 +187,7 @@ def update_attr_dict(attr_dict, slider_val):
 
 
 def set_driven_keys(attr_dict, limit_dict, controls, zero_as_default):
-    """ Set attribute values and key min, default and max slider values to each
+    """ Set attribute values and key min, default and max slider values
 
     Args:
         attr_dict: attribute names and their min, default and max values
@@ -241,7 +241,10 @@ def set_driven_keys(attr_dict, limit_dict, controls, zero_as_default):
 
 
 def get_selected_namespace():
-    """ Extracts list of namespaces from a selection"""
+    """ Extracts list of namespaces from a selection
+
+        Returns: list of unique namespaces
+    """
 
     selected = cmds.ls(selection=True)
     namespaces = []
@@ -291,7 +294,7 @@ def mirror_attrs(attr_dict):
 
 
 def rename_attr_dict(namespace, attr_dict):
-    """
+    """ Rename attributes in dictionary with selected namespace
 
     Args:
         namespace: string selected name of rig
