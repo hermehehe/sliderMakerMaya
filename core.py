@@ -124,6 +124,8 @@ def create_slider_attr(controls, zero_as_default):
     # Set circle ctrl translateY as the driver for the slider attr
     # set keys for min, default and max values of translate Y and slider attributes
     for i, j in limit_dict.items():
+        if i == 0 and not zero_as_default: # skip keying slider attr 0 twice
+            continue
         cmds.setAttr('{}.translateY'.format(controls[1]), i)
         cmds.setAttr(slider_full_name, j)
         cmds.setDrivenKeyframe(slider_full_name, cd='{}.translateY'.format(controls[1]))
@@ -187,7 +189,7 @@ def update_attr_dict(attr_dict, slider_val):
 
 
 def set_driven_keys(attr_dict, limit_dict, controls, zero_as_default):
-    """ Set attribute values and key min, default and max slider values
+    """ Set attribute values and key min, default and max slider values to each
 
     Args:
         attr_dict: attribute names and their min, default and max values
@@ -205,20 +207,20 @@ def set_driven_keys(attr_dict, limit_dict, controls, zero_as_default):
         if value_list[0] == value_list[-1]:
             continue
         # Check upper and lower bounds if they are in use (any attr going above or below 0)
-        if value_list[0] != 0 and zero_as_default:
+        if value_list[0] != 0.0 and zero_as_default:
             lwr_bound = True
-        if value_list[-1] != 0 and zero_as_default:
+        if value_list[-1] != 0.0 and zero_as_default:
             upr_bound = True
 
         # go through each attribute and key min, default and max values to the driver attribute
         i = 0
         for y_lim in limit_dict.keys():
             # if user does not select set zero as default skip keying default
-            if not zero_as_default and i == 1:
+            if not zero_as_default and y_lim == 0:
                 i += 1
                 continue
             # if min or max value equals default, skip keying (duplicate key)
-            elif value_list[i] == 0 and y_lim != 0 and zero_as_default:
+            elif value_list[i] == 0.0 and y_lim != 0 and zero_as_default:
                 i += 1
                 continue
 
@@ -230,21 +232,18 @@ def set_driven_keys(attr_dict, limit_dict, controls, zero_as_default):
             cmds.setDrivenKeyframe(attr, cd=ctrl_slider_attr)
             i += 1
 
-        # if lower or upper bound range not in use, restrict y translation value
-        if not lwr_bound and zero_as_default:
-            lims = cmds.transformLimits(controls[1], query=True, ty=True)
-            cmds.transformLimits(controls[1], ty=[0, lims[1]], ety=[True, True])
+    # if lower or upper bound range not in use, restrict y translation value
+    if not lwr_bound and zero_as_default:
+        lims = cmds.transformLimits(controls[1], query=True, ty=True)
+        cmds.transformLimits(controls[1], ty=[0, lims[1]], ety=[True, True])
 
-        if not upr_bound and zero_as_default:
-            lims = cmds.transformLimits(controls[1], query=True, ty=True)
-            cmds.transformLimits(controls[1], ty=[lims[0], 0], ety=[True, True])
+    if not upr_bound and zero_as_default:
+        lims = cmds.transformLimits(controls[1], query=True, ty=True)
+        cmds.transformLimits(controls[1], ty=[lims[0], 0], ety=[True, True])
 
 
 def get_selected_namespace():
-    """ Extracts list of namespaces from a selection
-
-        Returns: list of unique namespaces
-    """
+    """ Extracts list of namespaces from a selection"""
 
     selected = cmds.ls(selection=True)
     namespaces = []
@@ -294,7 +293,7 @@ def mirror_attrs(attr_dict):
 
 
 def rename_attr_dict(namespace, attr_dict):
-    """ Rename attributes in dictionary with selected namespace
+    """
 
     Args:
         namespace: string selected name of rig
