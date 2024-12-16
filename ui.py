@@ -162,8 +162,8 @@ def apply_attr_dict(*args):
         # set driven keys
         limit_dict = core.create_slider_attr(controls, zero_as_default_value)
         core.set_driven_keys(renamed_attr_dict, limit_dict, controls, zero_as_default_value)
-
-    # file_cleanup()
+        
+    file_cleanup()
 
 
 def add_mirror_attrs(name, attr_dict):
