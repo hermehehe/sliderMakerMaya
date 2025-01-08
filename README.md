@@ -23,8 +23,10 @@ Warnings have been added so users must complete each step in order before procee
 
 # Optional Features:
 This are features that are only enable when the user checks its box.
-Mirroring: Applies keys to other side of rig. E.g select and set poses for the left eye and the tool will apply it to the right eye aswell.
-Set Zero as Default: Sets all driven attributes and slider translation to zero in the middle of the slider. This allows users to easily set all influenced attributes back to zero by zeroing out the slider. If this option is not selected, the slider's zero value is moved to the bottom of the slider and is keyed to the min value. 
+
+*Mirroring*: Applies keys to other side of rig. E.g select and set poses for the left eye and the tool will apply it to the right eye aswell.
+
+*Set Zero as Default*: Sets all driven attributes and slider translation to zero in the middle of the slider. This allows users to easily set all influenced attributes back to zero by zeroing out the slider. If this option is not selected, the slider's zero value is moved to the bottom of the slider and is keyed to the min value. 
 
 
 This tool not only saves time by generating control UI and automating setting driven keys for attribute, it also allows users to set min and max poses in any order, it ensures keys are always set properly and users can set them as many times as they want before hitting apply. This is more flexible than setting driven keys manually, as the order the keys are set matters. It also does not key any unused attributes, so user could selected the entire rig and the result is the same as selecting only the in use controls.
