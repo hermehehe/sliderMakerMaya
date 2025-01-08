@@ -9,8 +9,13 @@ I created this tool as some people like the option to have rig controls as slide
 
 # How to Use
 1. Start Maya with a scene containing a referrenced rig. Users must type in a name for the slider.
-2. Select and save the controls you want to be driven by the slider. Saving the selection creates a dictionary stored in a .json file of each attribute as keys and a list containing min, default and max values. 3. Move the rig into desired start and end poses (in any order), saving each of them by pressing 'Set Min' and 'Set Max' buttons. This updates the affected dictionaries items min and max values.
+   
+2. Select and save the controls you want to be driven by the slider. Saving the selection creates a dictionary stored in a .json file of each attribute as keys and a list containing min, default and max values.
+
+3. Move the rig into desired start and end poses (in any order), saving each of them by pressing 'Set Min' and 'Set Max' buttons. This updates the affected dictionaries items min and max values.
+   
 4. Finally, select the rig(s) you want to connect to a slider, click 'Apply' which will generate the sliders UI and set all driven keys. The user can select one or multiple rigs and it will create a separate slider to each of them.
+
 Warnings have been added so users must complete each step in order before proceeding to the next.
 
 ![image](https://github.com/user-attachments/assets/70095c4f-9bae-4be6-88a7-6a9d152b2ad2)
